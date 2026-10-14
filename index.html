@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="fi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<!-- Kotinäytön kuvake ja nimi -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Junat">
+<link rel="apple-touch-icon" href="icon.png">
+<title>Junat</title>
+<style>
+  /* ---------- Värit: vaalea tila ---------- */
+  :root {
+    --bg: #ffffff;
+    --fg: #000000;
+    --muted: #55585e;
+    --rule: #d6d8dc;
+    --rule-strong: #1d1f22;
+    --badge: #c9ccd1;
+    --badge-fg: #000000;
+    --late: #b33c00;
+    --cancel: #c4161c;
+    --warn: #a33f00;
+  }
+  /* ---------- Värit: tumma tila ---------- */
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #000000;
+      --fg: #ffffff;
+      --muted: #a4a8ae;
+      --rule: #2b2d31;
+      --rule-strong: #8a8e95;
+      --badge: #3d4046;
+      --badge-fg: #ffffff;
+      --late: #ffa463;
+      --cancel: #ff6b6b;
+      --warn: #ffb266;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; background: var(--bg); }
+  body {
+    margin: 0 auto;
+    max-width: 560px;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+    font-variant-numeric: tabular-nums;
+    padding:
+      calc(10px + env(safe-area-inset-top, 0px))
+      calc(16px + env(safe-area-inset-right, 0px))
+      calc(16px + env(safe-area-inset-bottom, 0px))
+      calc(16px + env(safe-area-inset-left, 0px));
+  }
+
+  /* ---------- Yläreuna: suunta + päivitysaika ---------- */
+  .top {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 2px 12px;
+    padding: 4px 0 10px;
+    cursor: pointer;          /* täppäys = päivitä heti */
+    -webkit-tap-highlight-color: transparent;
+  }
+  .route { margin: 0; font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
+  .status { font-size: 14px; color: var(--muted); }
+  .status.warn { color: var(--warn); font-weight: 600; }
+
+  /* ---------- Sarakkeet: sama ruudukko otsikoilla ja riveillä ---------- */
+  .cols, .row {
+    display: grid;
+    grid-template-columns: 52px 1fr auto;
+    align-items: center;
+    column-gap: 10px;
+  }
+  .cols {
+    font-size: 14px;
+    color: var(--muted);
+    padding-bottom: 4px;
+    border-bottom: 1.5px solid var(--rule-strong);
+  }
+  .cols span:last-child, .track { text-align: right; }
+
+  .list { margin: 0; padding: 0; list-style: none; }
+  .row {
+    min-height: 58px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  /* Linjatunnus pyöreällä harmaalla taustalla */
+  .badge {
+    width: 42px; height: 42px;
+    border-radius: 50%;
+    background: var(--badge);
+    color: var(--badge-fg);
+    display: grid; place-items: center;
+    font-size: 21px; font-weight: 800;
+    line-height: 1;
+  }
+  .badge.long { font-size: 15px; }
+
+  /* Lähtöaika isolla, minuutit pienellä perässä */
+  .when { display: flex; align-items: baseline; flex-wrap: wrap; column-gap: 8px; min-width: 0; }
+  .time { font-size: 29px; font-weight: 750; letter-spacing: -0.02em; line-height: 1.1; }
+  .time.late { color: var(--late); }
+  .orig { font-size: 16px; color: var(--muted); text-decoration: line-through; }
+  .mins { font-size: 16px; font-weight: 500; white-space: nowrap; }
+
+  .track { font-size: 29px; font-weight: 750; min-width: 2ch; }
+
+  /* Peruttu juna */
+  .row.cancelled .time,
+  .row.cancelled .track { text-decoration: line-through; text-decoration-thickness: 2px; }
+  .tag-cancel { font-size: 16px; font-weight: 700; color: var(--cancel); }
+
+  .msg { padding: 28px 4px; font-size: 17px; color: var(--muted); text-align: center; line-height: 1.4; }
+  .msg code { font-size: 15px; color: var(--fg); }
+</style>
+</head>
+<body>
+
+<header class="top" id="top" title="Päivitä">
+  <h1 class="route" id="route">Junat</h1>
+  <div class="status" id="status">haetaan…</div>
+</header>
+
+<div class="cols" aria-hidden="true"><span>Juna</span><span>Lähtee</span><span>Raide</span></div>
+<ul class="list" id="list"></ul>
+
+<script>
+/* =========================================================
+   ASETUKSET
+   ========================================================= */
+const API = 'https://rata.digitraffic.fi/api/v1';
+const WINDOW_MIN = 60;          // näytetään seuraavan 60 min lähdöt
+const REFRESH_MS = 60 * 1000;   // haku minuutin välein
+const TICK_MS = 15 * 1000;      // minuuttilaskurin päivitys hakujen välillä
+const TZ = 'Europe/Helsinki';
+
+/* URL:n asetukset: ?asema=LPV&kohde=HKI&linjat=A,E */
+const params = new URLSearchParams(location.search);
+const asema = (params.get('asema') || '').trim().toUpperCase();
+const kohde = (params.get('kohde') || '').trim().toUpperCase();
+const linjat = (params.get('linjat') || '')
+  .split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+const CACHE_KEY = `junat:${asema}:${kohde}:${linjat.join(',')}`;
+const NAMES_KEY = 'junat:asemat';
+
+/* =========================================================
+   APUFUNKTIOT
+   ========================================================= */
+const $ = id => document.getElementById(id);
+
+// Puhelimen muisti (localStorage); ei kaadu, jos muisti ei ole käytettävissä
+const store = {
+  get(k) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+};
+
+// UTC-aika -> Suomen aika muodossa 17.52
+const timeFmt = new Intl.DateTimeFormat('fi-FI', {
+  timeZone: TZ, hour: 'numeric', minute: '2-digit', hourCycle: 'h23'
+});
+function hm(date) {
+  const p = timeFmt.formatToParts(date);
+  const h = parseInt(p.find(x => x.type === 'hour').value, 10);
+  const m = p.find(x => x.type === 'minute').value;
+  return `${h}.${m}`;
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+
+async function getJSON(url, timeoutMs = 10000) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { signal: ctrl.signal, cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return await res.json();
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+/* =========================================================
+   ASEMIEN NIMET (LPV -> Leppävaara), haetaan kerran ja muistetaan
+   ========================================================= */
+let names = store.get(NAMES_KEY) || {};
+
+function nameOf(code) { return names[code] || code; }
+
+function renderRoute() {
+  const from = nameOf(asema), to = nameOf(kohde);
+  $('route').textContent = `${from} → ${to}`;
+  document.title = `${from} → ${to}`;
+  // Ehdotettu nimi kotinäytölle (voit muokata sitä lisätessä)
+  document.querySelector('meta[name="apple-mobile-web-app-title"]')
+    .setAttribute('content', `→ ${to}`);
+}
+
+async function loadNames() {
+  if (names[asema] && names[kohde]) return;
+  try {
+    const stations = await getJSON(`${API}/metadata/stations`, 15000);
+    const map = {};
+    for (const s of stations) {
+      if (s.passengerTraffic) map[s.stationShortCode] = s.stationName.replace(/ asema$/i, '');
+    }
+    names = map;
+    store.set(NAMES_KEY, map);
+    renderRoute();
+  } catch { /* nimet eivät ole välttämättömiä: näytetään lyhenteet */ }
+}
+
+/* =========================================================
+   DATAN HAKU JA SUODATUS
+   ========================================================= */
+function trainsUrl() {
+  // Aikaikkuna eikä lukumäärä. minutes_after_departure antaa myös
+  // myöhässä olevat junat, joiden aikataulun mukainen aika on jo ohi.
+  const q = new URLSearchParams({
+    minutes_before_departure: WINDOW_MIN,
+    minutes_after_departure: 30,
+    minutes_before_arrival: 0,
+    minutes_after_arrival: 0,
+    train_categories: 'Commuter',
+    include_nonstopping: 'false'
+  });
+  return `${API}/live-trains/station/${encodeURIComponent(asema)}?${q}`;
+}
+
+// Pysähtyykö juna matkustajia varten tällä aikataulurivillä?
+const stopsForPassengers = r => r.trainStopping === true && r.commercialStop !== false;
+
+function pickDepartures(trains) {
+  const out = [];
+  for (const t of trains) {
+    if (t.trainCategory !== 'Commuter') continue;
+    const line = (t.commuterLineID || '').toUpperCase();
+    if (linjat.length && !linjat.includes(line)) continue;
+
+    const rows = t.timeTableRows || [];
+    const trainCancelled = !!t.cancelled;
+
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      if (r.type !== 'DEPARTURE' || r.stationShortCode !== asema) continue;
+      if (!stopsForPassengers(r)) continue;
+      if (r.actualTime) continue; // jo lähtenyt
+
+      // Kohdeasema myöhemmin reitillä JA juna pysähtyy siellä
+      const reaches = rows.slice(i + 1).some(x =>
+        x.type === 'ARRIVAL' &&
+        x.stationShortCode === kohde &&
+        stopsForPassengers(x) &&
+        (!x.cancelled || trainCancelled)
+      );
+      if (!reaches) continue;
+
+      out.push({
+        line: line || t.trainType || '?',
+        num: t.trainNumber,
+        sched: r.scheduledTime,                         // UTC
+        est: r.liveEstimateTime || r.scheduledTime,     // UTC, ennuste
+        track: r.commercialTrack || '',
+        cancelled: trainCancelled || !!r.cancelled
+      });
+      break;
+    }
+  }
+  return out;
+}
+
+/* =========================================================
+   TILA JA PIIRTÄMINEN
+   ========================================================= */
+let items = [];          // viimeisin lista
+let fetchedAt = null;    // milloin lista on haettu (Date)
+let offline = false;
+let inFlight = false;
+let lastAttempt = 0;
+
+function visibleItems(now) {
+  const nowMs = now.getTime();
+  return items
+    .filter(d => {
+      const t = new Date(d.est).getTime();
+      return t >= nowMs - 60 * 1000 &&            // lähteneet pois
+             t <= nowMs + WINDOW_MIN * 60 * 1000;
+    })
+    .sort((a, b) => new Date(a.est) - new Date(b.est));
+}
+
+function rowHtml(d, now) {
+  const sched = new Date(d.sched);
+  const est = new Date(d.est);
+  const late = !d.cancelled && hm(est) !== hm(sched);
+  const min = Math.floor((est - now) / 60000);
+  const minsText = min <= 0 ? 'nyt' : `${min} min`;
+
+  const timeHtml = late
+    ? `<span class="time late">${hm(est)}</span><span class="orig">${hm(sched)}</span>`
+    : `<span class="time">${hm(sched)}</span>`;
+
+  const tail = d.cancelled
+    ? `<span class="tag-cancel">Peruttu</span>`
+    : `<span class="mins">${minsText}</span>`;
+
+  const label = d.cancelled
+    ? `${d.line}-juna ${hm(sched)} peruttu`
+    : `${d.line}-juna lähtee ${hm(est)}${late ? `, alun perin ${hm(sched)}` : ''}, ${minsText}, raide ${d.track || 'ei tiedossa'}`;
+
+  return `<li class="row${d.cancelled ? ' cancelled' : ''}" aria-label="${esc(label)}">
+    <span class="badge${d.line.length > 1 ? ' long' : ''}">${esc(d.line)}</span>
+    <span class="when">${timeHtml}${tail}</span>
+    <span class="track">${esc(d.track || '–')}</span>
+  </li>`;
+}
+
+function render() {
+  const now = new Date();
+  const list = $('list');
+  const status = $('status');
+
+  // Päivitysaika / varoitus
+  if (offline) {
+    status.textContent = fetchedAt ? `Ei yhteyttä – tiedot klo ${hm(fetchedAt)}` : 'Ei yhteyttä';
+    status.classList.add('warn');
+  } else if (fetchedAt) {
+    status.textContent = `päivitetty klo ${hm(fetchedAt)}`;
+    status.classList.remove('warn');
+  }
+
+  if (!fetchedAt) {
+    list.innerHTML = offline
+      ? `<li class="msg">Junatietoja ei saatu. Yritetään uudelleen minuutin päästä.</li>`
+      : '';
+    return;
+  }
+
+  const shown = visibleItems(now);
+  list.innerHTML = shown.length
+    ? shown.map(d => rowHtml(d, now)).join('')
+    : `<li class="msg">Ei lähteviä lähijunia lähiaikoina</li>`;
+}
+
+async function refresh(force = false) {
+  if (inFlight) return;
+  if (!force && Date.now() - lastAttempt < 5000) return; // ei tuplahakuja
+  inFlight = true;
+  lastAttempt = Date.now();
+  try {
+    const trains = await getJSON(trainsUrl());
+    items = pickDepartures(trains);
+    fetchedAt = new Date();
+    offline = false;
+    store.set(CACHE_KEY, { fetchedAt: fetchedAt.toISOString(), items });
+  } catch {
+    offline = true; // näytetään edellinen lista
+  } finally {
+    inFlight = false;
+    render();
+  }
+}
+
+/* =========================================================
+   KÄYNNISTYS
+   ========================================================= */
+function start() {
+  if (!asema || !kohde) {
+    $('route').textContent = 'Junat';
+    $('status').textContent = '';
+    $('list').innerHTML = `<li class="msg">Lisää osoitteen loppuun asemat, esim.<br>
+      <code>?asema=LPV&amp;kohde=HKI</code></li>`;
+    return;
+  }
+
+  renderRoute();
+  loadNames();
+
+  // Näytä heti viimeksi tallennettu lista, kunnes uusi haku valmistuu
+  const cached = store.get(CACHE_KEY);
+  if (cached && cached.items) {
+    items = cached.items;
+    fetchedAt = new Date(cached.fetchedAt);
+    render();
+    $('status').textContent = `tiedot klo ${hm(fetchedAt)} · päivitetään…`;
+  }
+
+  refresh(true);
+
+  // Minuutin välein uusi haku (vain kun sivu näkyy)
+  setInterval(() => { if (document.visibilityState === 'visible') refresh(); }, REFRESH_MS);
+  // Minuuttilaskuri hakujen välillä
+  setInterval(() => { if (document.visibilityState === 'visible') render(); }, TICK_MS);
+
+  // Palattaessa taustalta: piirrä heti ja hae uudet tiedot
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') { render(); refresh(); }
+  });
+  window.addEventListener('pageshow', () => { render(); refresh(); });
+  window.addEventListener('focus', () => refresh());
+  window.addEventListener('online', () => refresh(true));
+
+  // Yläreunan täppäys päivittää heti
+  $('top').addEventListener('click', () => refresh(true));
+}
+
+start();
+</script>
+</body>
+</html>
