@@ -307,7 +307,7 @@ function rowHtml(d, now) {
   const est = new Date(d.est);
   const late = !d.cancelled && hm(est) !== hm(sched);
   const min = Math.floor((est - now) / 60000);
-  const minsText = min <= 0 ? 'nyt' : `${min} min`;
+  const minsText = min <= 0 ? '0 min' : `${min} min`;
 
   const timeHtml = late
     ? `<span class="time late">${hm(est)}</span><span class="orig">${hm(sched)}</span>`
