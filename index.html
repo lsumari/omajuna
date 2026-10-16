@@ -21,8 +21,8 @@
     --muted: #55585e;
     --rule: #d6d8dc;
     --rule-strong: #1d1f22;
-    --badge: #c9ccd1;
-    --badge-fg: #000000;
+    --badge: #000000;
+    --badge-fg: #ffffff;
     --late: #b33c00;
     --cancel: #c4161c;
     --warn: #a33f00;
@@ -35,8 +35,8 @@
       --muted: #a4a8ae;
       --rule: #2b2d31;
       --rule-strong: #8a8e95;
-      --badge: #3d4046;
-      --badge-fg: #ffffff;
+      --badge: #e8eaee;
+      --badge-fg: #000000;
       --late: #ffa463;
       --cancel: #ff6b6b;
       --warn: #ffb266;
@@ -96,7 +96,7 @@
     border-bottom: 1px solid var(--rule);
   }
 
-  /* Linjatunnus pyöreällä harmaalla taustalla */
+  /* Linjatunnus pyöreällä taustalla: vaalea tila valkoinen mustalla, tumma tila musta vaalealla */
   .badge {
     width: 42px; height: 42px;
     border-radius: 50%;
@@ -382,7 +382,7 @@ function start() {
     $('route').textContent = 'Junat';
     $('status').textContent = '';
     $('list').innerHTML = `<li class="msg">Lisää osoitteen loppuun asemat, esim.<br>
-      <code>?asema=LPV&amp;kohde=HKI</code></li>`;
+      <a href="?asema=LPV&amp;kohde=HKI"><code>?asema=LPV&amp;kohde=HKI</code></a></li>`;
     return;
   }
 
