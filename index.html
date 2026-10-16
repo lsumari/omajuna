@@ -23,6 +23,9 @@
     --rule-strong: #1d1f22;
     --badge: #000000;
     --badge-fg: #ffffff;
+    --fast-bg: #e3f5e1;
+    --fast-badge: #0d5c26;
+    --fast-badge-fg: #ffffff;
     --late: #b33c00;
     --cancel: #c4161c;
     --warn: #a33f00;
@@ -37,6 +40,9 @@
       --rule-strong: #8a8e95;
       --badge: #e8eaee;
       --badge-fg: #000000;
+      --fast-bg: #0c2a14;
+      --fast-badge: #5fd283;
+      --fast-badge-fg: #000000;
       --late: #ffa463;
       --cancel: #ff6b6b;
       --warn: #ffb266;
@@ -92,9 +98,13 @@
   .list { margin: 0; padding: 0; list-style: none; }
   .row {
     min-height: 58px;
-    padding: 6px 0;
+    /* Sivuttaispolstri + negatiivinen marginaali: tausta ulottuu reunoihin, sisältö pysyy otsikoiden kohdalla */
+    padding: 6px 8px;
+    margin: 0 -8px;
     border-bottom: 1px solid var(--rule);
   }
+  .row.fast { background: var(--fast-bg); }
+  .row.fast .badge { background: var(--fast-badge); color: var(--fast-badge-fg); }
 
   /* Linjatunnus pyöreällä taustalla: vaalea tila valkoinen mustalla, tumma tila musta vaalealla */
   .badge {
@@ -145,6 +155,7 @@ const WINDOW_MIN = 60;          // näytetään seuraavan 60 min lähdöt
 const REFRESH_MS = 60 * 1000;   // haku minuutin välein
 const TICK_MS = 15 * 1000;      // minuuttilaskurin päivitys hakujen välillä
 const TZ = 'Europe/Helsinki';
+const SLOW_LINES = ['A', 'L'];  // hitaat linjat; kaikki muut ovat nopeita
 
 /* URL:n asetukset: ?asema=LPV&kohde=HKI&linjat=A,E */
 const params = new URLSearchParams(location.search);
@@ -321,7 +332,9 @@ function rowHtml(d, now) {
     ? `${d.line}-juna ${hm(sched)} peruttu`
     : `${d.line}-juna lähtee ${hm(est)}${late ? `, alun perin ${hm(sched)}` : ''}, ${minsText}, raide ${d.track || 'ei tiedossa'}`;
 
-  return `<li class="row${d.cancelled ? ' cancelled' : ''}" aria-label="${esc(label)}">
+  const fast = !SLOW_LINES.includes(d.line);
+
+  return `<li class="row${fast ? ' fast' : ''}${d.cancelled ? ' cancelled' : ''}" aria-label="${esc(label)}">
     <span class="badge${d.line.length > 1 ? ' long' : ''}">${esc(d.line)}</span>
     <span class="when">${timeHtml}${tail}</span>
     <span class="track">${esc(d.track || '–')}</span>
