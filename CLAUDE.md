@@ -29,6 +29,10 @@ Avaa `index.html` selaimessa osoitteella `?asema=LPV&kohde=HKI`.
 
 Kun sivu avataan ilman parametreja, se näyttää ohjetekstin, jossa on klikattava esimerkkilinkki (`?asema=LPV&kohde=HKI`). Pidä linkki ohjetekstissä.
 
+## Tiedostojen muokkaus
+
+Muokkaa tiedostoja Edit-työkalulla. Älä käytä muokkaamiseen `sed`-komentoa, Pythonia tai muita skriptejä. Komentojen ajaminen on tässä projektissa tarpeen vain poikkeustapauksissa.
+
 ## Git
 
 Älä tee committeja äläkä pushaa. Käyttäjä hoitaa ne itse.
