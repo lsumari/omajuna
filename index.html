@@ -384,7 +384,7 @@ function render() {
     status.textContent = fetchedAt ? `Ei yhteyttä – tiedot klo ${hm(fetchedAt)}` : 'Ei yhteyttä';
     status.classList.add('warn');
   } else if (fetchedAt) {
-    status.textContent = `päivitetty klo ${hm(fetchedAt)}`;
+    status.textContent = `Päivitetty: ${hm(fetchedAt)}`;
     status.classList.remove('warn');
   }
 
